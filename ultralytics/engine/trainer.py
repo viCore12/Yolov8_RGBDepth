@@ -377,7 +377,7 @@ class BaseTrainer:
                 ##############################################
                 img_input = self.depth_transform(batch['img']) # Convert to 4D: (1, 3, H, W)
                 depth_map = self.depth_model(img_input)  # Get depth map and remove batch dimension | 1, H, W
-                batch_img = torch.cat((img_input.squeeze(0), depth_map), dim=0) # Stack along the channel dimension (4, H, W)
+                batch['img'] = torch.cat((img_input.squeeze(0), depth_map), dim=0) # Stack along the channel dimension (4, H, W)
                 #LOGGER.info(f"size img when training '{batch['img'].size()}'")
                 ##############################################
                 self.run_callbacks("on_train_batch_start")

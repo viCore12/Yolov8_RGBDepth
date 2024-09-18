@@ -173,14 +173,9 @@ class BaseValidator:
 
             # Inference
             with dt[1]:
-                batch_img = batch['img']
-                noise_channel = torch.randn(batch_img.size(0), 1, batch_img.size(2), batch_img.size(3))
-
-                batch_img_device = batch_img.device  # Get the device of batch_img
-                noise_channel = noise_channel.to(batch_img_device)
-
-                batch_img_with_noise = torch.cat([batch_img, noise_channel], dim=1)
-                batch['img'] = batch_img_with_noise
+                img_input = self.depth_transform(batch['img']) # Convert to 4D: (1, 3, H, W)
+                depth_map = self.depth_model(img_input)  # Get depth map and remove batch dimension | 1, H, W
+                batch['img'] = torch.cat((img_input.squeeze(0), depth_map), dim=0) # Stack along the channel dimension (4, H, W)
                 #LOGGER.info(f"size img when validating '{batch['img'].size()}'")
                 model = model.to(batch_img_device)
                 preds = model(batch["img"].half(), augment=augment)
