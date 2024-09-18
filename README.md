@@ -1,5 +1,5 @@
 ﻿# Yolov8-RGBDepth
-
+The ultralytics framework customed to training data with 4D input.
 
 ## Train on your custom data
 ```rb
