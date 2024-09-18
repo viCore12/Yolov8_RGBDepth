@@ -14,7 +14,7 @@ model.train(data="/content/drive/MyDrive/data/mydataset.yaml", epochs=20, batch=
 depth_model = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
 depth_transform = torch.hub.load("intel-isl/MiDaS", "transforms").small_transform
 ```
-### Visualize Original image - 4D RGBD image - Depth map image 
+### Visualize Original image - 4D RGBD image (Original + Depth map) - Depth map image 
 ![image](https://github.com/user-attachments/assets/70d68ba1-7fa6-494b-bfd4-4dab5d1df291)
 
 
