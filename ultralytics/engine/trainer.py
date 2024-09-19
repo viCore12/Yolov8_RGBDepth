@@ -16,6 +16,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 from torch import distributed as dist
@@ -375,9 +376,25 @@ class BaseTrainer:
             self.tloss = None
             for i, batch in pbar:
                 ##############################################
-                img_input = self.depth_transform(batch['img']) # Convert to 4D: (1, 3, H, W)
-                depth_map = self.depth_model(img_input)  # Get depth map and remove batch dimension | 1, H, W
-                batch['img'] = torch.cat((img_input.squeeze(0), depth_map), dim=0) # Stack along the channel dimension (4, H, W)
+                batch_images = batch['img']  # (batch_size, 3, H, W)
+
+                #Case 1: Noise
+                batch_size, _, H, W = batch_images.shape
+                noise = torch.randn((batch_size, 1, H, W))
+                batch['img'] = torch.cat((batch_images, noise), dim=1)
+                
+                #Case 2: MiDaS
+                # depth_maps = []
+                # for i in range(batch_images.size(0)):
+                #     img = batch_images[i].permute(1, 2, 0)
+                #     if isinstance(img, torch.Tensor):
+                #         img = img.detach().cpu().numpy()
+                #     img_input = self.depth_transform(img)  # Giả sử đầu ra là (1, 3, H, W)
+                #     depth_map = self.depth_model(img_input) 
+                #     img_with_depth = torch.cat((img_input.squeeze(0), depth_map), dim=0) 
+                #     depth_maps.append(img_with_depth)
+
+                # batch['img'] = torch.stack(depth_maps)
                 #LOGGER.info(f"size img when training '{batch['img'].size()}'")
                 ##############################################
                 self.run_callbacks("on_train_batch_start")

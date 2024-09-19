@@ -101,6 +101,8 @@ class BaseValidator:
 
         self.plots = {}
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
+        self.depth_model = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
+        self.depth_transform = torch.hub.load("intel-isl/MiDaS", "transforms").small_transform
 
     @smart_inference_mode()
     def __call__(self, trainer=None, model=None):
@@ -152,7 +154,7 @@ class BaseValidator:
             self.dataloader = self.dataloader or self.get_dataloader(self.data.get(self.args.split), self.args.batch)
 
             model.eval()
-            model.warmup(imgsz=(1 if pt else self.args.batch, 4, imgsz, imgsz))  # warmup
+            model.warmup(imgsz=(1 if pt else self.args.batch, 3, imgsz, imgsz))  # warmup
 
         self.run_callbacks("on_val_start")
         dt = (
@@ -173,12 +175,21 @@ class BaseValidator:
 
             # Inference
             with dt[1]:
-                img_input = self.depth_transform(batch['img']) # Convert to 4D: (1, 3, H, W)
-                depth_map = self.depth_model(img_input)  # Get depth map and remove batch dimension | 1, H, W
-                batch['img'] = torch.cat((img_input.squeeze(0), depth_map), dim=0) # Stack along the channel dimension (4, H, W)
-                #LOGGER.info(f"size img when validating '{batch['img'].size()}'")
-                model = model.to(batch_img_device)
-                preds = model(batch["img"].half(), augment=augment)
+                batch_images = batch['img']  # (batch_size, 3, H, W)
+                depth_maps = []
+                for i in range(batch_images.size(0)):
+                    img = batch_images[i].permute(1, 2, 0)
+                    if isinstance(img, torch.Tensor):
+                        img = img.detach().cpu().numpy().astype(np.uint8)
+                    img_input = self.depth_transform(img)  
+                    depth_map = self.depth_model(img_input) 
+                    img_with_depth = torch.cat((img_input.squeeze(0), depth_map), dim=0) 
+                    depth_maps.append(img_with_depth)
+
+                model = model.to(self.device)
+                batch['img'] = torch.stack(depth_maps).to(self.device)
+                with torch.no_grad():
+                    preds = model(batch["img"].half(), augment=augment)
 
             # Loss
             with dt[2]:
