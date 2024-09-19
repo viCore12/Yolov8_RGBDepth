@@ -1,5 +1,0 @@
-train: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train
-val: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train
-nc: 1
-names: ['fire']
-ch: 4
