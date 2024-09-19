@@ -134,7 +134,6 @@ class BaseTrainer:
 
         # Model and Dataset
         self.model = check_model_file_from_stem(self.args.model)  # add suffix, i.e. yolov8n -> yolov8n.pt
-        LOGGER.info(f"Hello what's up setup_train '{self.model}'")
 
         with torch_distributed_zero_first(LOCAL_RANK):  # avoid auto-downloading dataset multiple times
             self.trainset, self.testset = self.get_dataset() # Just path direction '/home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train'
@@ -240,9 +239,6 @@ class BaseTrainer:
         self.run_callbacks("on_pretrain_routine_start")
         ckpt = self.setup_model()
         self.model = self.model.to(self.device)
-
-        #################################
-        #LOGGER.info(f"Hello what's up model wtf '{self.model}'")
         self.set_model_attributes()
 
         # Freeze layers
@@ -375,28 +371,20 @@ class BaseTrainer:
                 pbar = TQDM(enumerate(self.train_loader), total=nb)
             self.tloss = None
             for i, batch in pbar:
-                ##############################################
+                #####################
                 batch_images = batch['img']  # (batch_size, 3, H, W)
+                depth_maps = []
+                for i in range(batch_images.size(0)):
+                    img = batch_images[i].permute(1, 2, 0)
+                    if isinstance(img, torch.Tensor):
+                        img = img.detach().cpu().numpy()
+                    img_input = self.depth_transform(img)  # Giả sử đầu ra là (1, 3, H, W)
+                    depth_map = self.depth_model(img_input) 
+                    img_with_depth = torch.cat((img_input.squeeze(0), depth_map), dim=0) 
+                    depth_maps.append(img_with_depth)
 
-                #Case 1: Noise
-                batch_size, _, H, W = batch_images.shape
-                noise = torch.randn((batch_size, 1, H, W))
-                batch['img'] = torch.cat((batch_images, noise), dim=1)
-                
-                #Case 2: MiDaS
-                # depth_maps = []
-                # for i in range(batch_images.size(0)):
-                #     img = batch_images[i].permute(1, 2, 0)
-                #     if isinstance(img, torch.Tensor):
-                #         img = img.detach().cpu().numpy()
-                #     img_input = self.depth_transform(img)  # Giả sử đầu ra là (1, 3, H, W)
-                #     depth_map = self.depth_model(img_input) 
-                #     img_with_depth = torch.cat((img_input.squeeze(0), depth_map), dim=0) 
-                #     depth_maps.append(img_with_depth)
-
-                # batch['img'] = torch.stack(depth_maps)
-                #LOGGER.info(f"size img when training '{batch['img'].size()}'")
-                ##############################################
+                batch['img'] = torch.stack(depth_maps)
+                #######################
                 self.run_callbacks("on_train_batch_start")
                 # Warmup
                 ni = i + nb * epoch
