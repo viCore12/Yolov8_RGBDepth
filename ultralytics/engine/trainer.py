@@ -21,6 +21,7 @@ import numpy as np
 import torch
 from torch import distributed as dist
 from torch import nn, optim
+from torchvision import transforms
 
 from ultralytics.cfg import get_cfg, get_save_dir
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
@@ -371,20 +372,34 @@ class BaseTrainer:
                 pbar = TQDM(enumerate(self.train_loader), total=nb)
             self.tloss = None
             for i, batch in pbar:
-                #####################
+                ##############################################
                 batch_images = batch['img']  # (batch_size, 3, H, W)
+                #Case 1: Noise
+                # batch_size, _, H, W = batch_images.shape
+                # noise = torch.randn((batch_size, 1, H, W))
+                # batch['img'] = torch.cat((batch_images, noise), dim=1)
+                
+                #Case 2: MiDaS
                 depth_maps = []
                 for i in range(batch_images.size(0)):
                     img = batch_images[i].permute(1, 2, 0)
                     if isinstance(img, torch.Tensor):
-                        img = img.detach().cpu().numpy()
-                    img_input = self.depth_transform(img)  # Giả sử đầu ra là (1, 3, H, W)
-                    depth_map = self.depth_model(img_input) 
-                    img_with_depth = torch.cat((img_input.squeeze(0), depth_map), dim=0) 
+                        img = img.detach().cpu().numpy() #(640, 640, 3)
+                        img = cv2.resize(img, (256, 256)) #(256, 256, 3)
+
+                    img_input = self.depth_transform(img) # torch.Size([1, 3, 256, 256])
+                    depth_map = self.depth_model(img_input) # torch.Size([1, 256, 256])
+                    depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
+                    img_with_depth = torch.cat((torch.tensor(np.transpose(img, (2, 0, 1))), depth_map), dim=0) # [4, 256, 256]
+
+                    #image_to_save = img_with_depth[:3].permute(1, 2, 0).detach().cpu().numpy()  # Convert to HWC format
+                    #cv2.imwrite('image_1.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
+
                     depth_maps.append(img_with_depth)
 
                 batch['img'] = torch.stack(depth_maps)
-                #######################
+                #LOGGER.info(f"size img when training '{batch['img'].size()}'")
+            
                 self.run_callbacks("on_train_batch_start")
                 # Warmup
                 ni = i + nb * epoch
