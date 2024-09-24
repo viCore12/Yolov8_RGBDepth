@@ -374,12 +374,6 @@ class BaseTrainer:
             for i, batch in pbar:
                 ##############################################
                 batch_images = batch['img']  # (batch_size, 3, H, W)
-                #Case 1: Noise
-                # batch_size, _, H, W = batch_images.shape
-                # noise = torch.randn((batch_size, 1, H, W))
-                # batch['img'] = torch.cat((batch_images, noise), dim=1)
-                
-                #Case 2: MiDaS
                 depth_maps = []
                 for i in range(batch_images.size(0)):
                     img = batch_images[i].permute(1, 2, 0)
@@ -392,8 +386,8 @@ class BaseTrainer:
                     depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
                     img_with_depth = torch.cat((torch.tensor(np.transpose(img, (2, 0, 1))), depth_map), dim=0) # [4, 256, 256]
 
-                    #image_to_save = img_with_depth[:3].permute(1, 2, 0).detach().cpu().numpy()  # Convert to HWC format
-                    #cv2.imwrite('image_1.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
+                    # image_to_save = img_with_depth[:3].permute(1, 2, 0).detach().cpu().numpy()  # Convert to HWC format
+                    # cv2.imwrite('image_1.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
 
                     depth_maps.append(img_with_depth)
 
@@ -417,6 +411,11 @@ class BaseTrainer:
                 # Forward
                 with autocast(self.amp):
                     batch = self.preprocess_batch(batch)
+
+                    # image_to_save = batch["img"][:, :3, :, :][0].permute(1, 2, 0).detach().cpu().numpy()
+                    # image_to_save = (image_to_save*255).astype(np.uint8)
+                    # cv2.imwrite('image_before_trainer.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
+
                     self.loss, self.loss_items = self.model(batch)
                     if RANK != -1:
                         self.loss *= world_size

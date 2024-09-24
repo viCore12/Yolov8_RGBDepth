@@ -157,7 +157,6 @@ class BaseValidator:
 
             model.eval()
             model.warmup(imgsz=(1 if pt else self.args.batch, 4, imgsz, imgsz))  # warmup ###### phải sửa
-
         self.run_callbacks("on_val_start")
         dt = (
             Profile(device=self.device),
@@ -165,39 +164,39 @@ class BaseValidator:
             Profile(device=self.device),
             Profile(device=self.device),
         )
-        bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
+        bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader)) #102
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
         for batch_i, batch in enumerate(bar):
             self.run_callbacks("on_val_batch_start")
             self.batch_i = batch_i
+            batch_images = batch['img']  # (batch_size x 2, 3, H, W) do parallel
+            depth_maps = []
+            for i in range(batch_images.size(0)):
+                img = batch_images[i]
+                if isinstance(img, torch.Tensor):
+                    img = img.detach().cpu().numpy() #(640, 640, 3)
+                    img = np.transpose(img, (1, 2, 0))
+                    img = cv2.resize(img, (256, 256)) #(256, 256, 3)
+
+                img_input = self.depth_transform(img) # torch.Size([1, 3, 256, 256])
+                depth_map = self.depth_model(img_input) # torch.Size([1, 256, 256])
+                depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
+                
+                img_with_depth = torch.cat((torch.tensor(np.transpose(img, (2, 0, 1))), depth_map), dim=0) #[4, 256, 256]
+                depth_maps.append(img_with_depth)
+
+            batch['img'] = torch.stack(depth_maps) #x2 train_batch?
             # Preprocess
             with dt[0]:
-                batch = self.preprocess(batch)
-
+                batch = self.preprocess(batch) #### model/yolo/detect/val
+                # image_to_save = batch["img"][:, :3, :, :][0].permute(1, 2, 0).detach().cpu().numpy()
+                # image_to_save = (image_to_save*255).astype(np.uint8)
+                # cv2.imwrite('image_before_valid.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
+                
             # Inference
             with dt[1]:
-                batch_images = batch['img']  # (batch_size, 3, H, W)
-                depth_maps = []
-                for i in range(batch_images.size(0)):
-                    img = batch_images[i]
-                    if isinstance(img, torch.Tensor):
-                        img = img.detach().cpu().numpy() #(640, 640, 3)
-                        img = np.transpose(img, (1, 2, 0))
-                        img = (img * 255).astype(np.uint8)
-                        img = cv2.resize(img, (256, 256)) #(256, 256, 3)
-
-                    img_input = self.depth_transform(img) # torch.Size([1, 3, 256, 256])
-                    depth_map = self.depth_model(img_input) # torch.Size([1, 256, 256])
-                    depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
-                    img_with_depth = torch.cat((torch.tensor(np.transpose(img, (2, 0, 1))), depth_map), dim=0) # [4, 256, 256]
-
-                    depth_maps.append(img_with_depth)
-
-                model = model.to(self.device)
-                batch['img'] = torch.stack(depth_maps).to(self.device)
-                with torch.no_grad():
-                    preds = model(batch["img"].half(), augment=augment)
+                preds = model(batch["img"], augment=augment)
 
             # Loss
             with dt[2]:
@@ -250,7 +249,7 @@ class BaseValidator:
             use_scipy (bool): Whether to use scipy for matching (more precise).
 
         Returns:
-            (torch.Tensor): Correct tensor of shape(N,10) for 10 IoU thresholds.
+            (torch.Tensor): Correct tensor of shape(N, 10) for 10 IoU thresholds.
         """
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
         correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)

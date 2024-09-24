@@ -961,8 +961,16 @@ def plot_images(
         This function supports both tensor and numpy array inputs. It will automatically
         convert tensor inputs to numpy arrays for processing.
     """
-    if isinstance(images, torch.Tensor):
-        images = images[:, :3, :, :].detach().cpu().numpy() 
+    if isinstance(images, torch.Tensor):#images torch.Size([16, 4, 256, 256])
+        images = images[:, :3, :, :].detach().cpu().numpy() #16, 3, 256, 256
+
+        # if images.shape[0] > 0:  # Kiểm tra xem có hình ảnh trong batch hay không
+        #     img_array = images[0]  # Lấy hình ảnh đầu tiên
+        #     img_array = np.transpose(img_array, (1, 2, 0))  # Chuyển đổi từ (C, H, W) sang (H, W, C)
+        #     #img = Image.fromarray((img_array * 255).astype(np.uint8))  # Chuyển đổi mảng về kiểu uint8
+        #     img = Image.fromarray(np.uint8(img_array)) 
+        #     img.save('first_image.png')
+
     if isinstance(cls, torch.Tensor):
         cls = cls.cpu().numpy()
     if isinstance(bboxes, torch.Tensor):
@@ -985,7 +993,7 @@ def plot_images(
     for i in range(bs):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         ################################# Edit rgb
-        mosaic[y : y + h, x : x + w, :] = images[i][:3].transpose(1, 2, 0)
+        mosaic[y : y + h, x : x + w, :] = images[i].transpose(1, 2, 0)
 
     # Resize (optional)
     scale = max_size / ns / max(h, w)
