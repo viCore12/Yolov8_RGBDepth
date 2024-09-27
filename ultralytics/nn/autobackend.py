@@ -447,15 +447,23 @@ class AutoBackend(nn.Module):
         """
         b, ch, h, w = im.shape  # batch, channel, height, width
         #ch = 4
+        ############################################
+        #print("Hello model lol", self.model.model[0].conv)
+        if self.model.model[0].conv.in_channels == 3:
+            self.model.model[0].conv = nn.Conv2d(4, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+        
         if self.fp16 and im.dtype != torch.float16:
             im = im.half()  # to FP16
         if self.nhwc:
-            im = im.permute(0, 2, 3, 1)  # torch BCHW to numpy BHWC shape(1,320,192,3)
+            im = im.permute(0, 2, 3, 1)  # torch BCHW to numpy BHWC shape(1, 320, 192, 3)
 
         # PyTorch
         if self.pt or self.nn_module:
-            y = self.model(im, augment=augment, visualize=visualize, embed=embed)
+            self.model = self.model.to(self.device) ##########################
+            im = im.to(self.device)
 
+            y = self.model(im, augment=augment, visualize=visualize, embed=embed)
+        
         # TorchScript
         elif self.jit:
             y = self.model(im)
@@ -624,7 +632,7 @@ class AutoBackend(nn.Module):
         """
         return torch.tensor(x).to(self.device) if isinstance(x, np.ndarray) else x
 
-    def warmup(self, imgsz=(1, 3, 640, 640)):
+    def warmup(self, imgsz=(1, 4, 640, 640)):
         """
         Warm up the model by running one forward pass with a dummy input.
 

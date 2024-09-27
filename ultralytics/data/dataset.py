@@ -38,6 +38,7 @@ from .utils import (
     verify_image,
     verify_image_label,
 )
+import torch.nn.functional as F
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = "1.0.3"
@@ -228,22 +229,32 @@ class YOLODataset(BaseDataset):
         return label
 
     @staticmethod
-    def collate_fn(batch):
-        """Collates data samples into batches."""
+    def collate_fn(batch, target_size=(640, 360)):
+        """Collates data samples into batches and resizes images to target size."""
         new_batch = {}
         keys = batch[0].keys()
         values = list(zip(*[list(b.values()) for b in batch]))
+        
         for i, k in enumerate(keys):
             value = values[i]
+            
             if k == "img":
-                value = torch.stack(value, 0)
+                # Resize all images to target_size
+                resized_images = [F.interpolate(v.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0) for v in value]
+                value = torch.stack(resized_images, 0)
+            
             if k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb"}:
                 value = torch.cat(value, 0)
+            
             new_batch[k] = value
-        new_batch["batch_idx"] = list(new_batch["batch_idx"])
-        for i in range(len(new_batch["batch_idx"])):
-            new_batch["batch_idx"][i] += i  # add target image index for build_targets()
-        new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
+        
+        # Xử lý batch_idx
+        if "batch_idx" in new_batch:
+            new_batch["batch_idx"] = list(new_batch["batch_idx"])
+            for i in range(len(new_batch["batch_idx"])):
+                new_batch["batch_idx"][i] += i  # add target image index for build_targets()
+            new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
+        
         return new_batch
 
 
