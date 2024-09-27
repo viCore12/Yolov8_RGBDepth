@@ -111,6 +111,8 @@ class BasePredictor:
         self.txt_path = None
         self._lock = threading.Lock()  # for automatic thread-safe inference
         callbacks.add_integration_callbacks(self)
+        self.depth_model = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
+        self.depth_transform = torch.hub.load("intel-isl/MiDaS", "transforms").small_transform
 
     def preprocess(self, im):
         """
@@ -231,7 +233,7 @@ class BasePredictor:
 
             # Warmup model
             if not self.done_warmup:
-                self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, 3, *self.imgsz))
+                self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, 4, *self.imgsz)) ##### phải sửa 3 -> 4
                 self.done_warmup = True
 
             self.seen, self.windows, self.batch = 0, [], None
@@ -244,14 +246,44 @@ class BasePredictor:
             for self.batch in self.dataset:
                 self.run_callbacks("on_predict_batch_start")
                 paths, im0s, s = self.batch
-
+                # depth_maps = []
+                # for img_in_batch in im0s:
+                #     img = cv2.resize(img_in_batch, (256, 256)) #(256, 256, 3)
+                #     img_input = self.depth_transform(img) # torch.Size([1, 3, 256, 256])
+                #     depth_map = self.depth_model(img_input) # torch.Size([1, 256, 256])
+                #     depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
+                #     img_with_depth = np.concatenate((img, (np.transpose(depth_map, (1, 2, 0)))), axis=2) #[256, 256, 4]
+                #     depth_maps.append(img_with_depth)
+                # im0s = depth_maps
                 # Preprocess
                 with profilers[0]:
                     im = self.preprocess(im0s)
+                    depth_maps = []
+                    for i in range(im.size(0)):
+                        img_in_batch = im[i]  #(3, 480, 640)
+                        if isinstance(img_in_batch, torch.Tensor):
+                            img = img_in_batch.detach().cpu().numpy()
+                            img = np.transpose(img, (1, 2, 0))
+                            img = cv2.resize(img, (256, 256)) #(256, 256, 3)
+
+                        img_input = self.depth_transform(img) # torch.Size([1, 3, 256, 256])
+                        depth_map = self.depth_model(img_input) # torch.Size([1, 256, 256])
+                        depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
+                        
+                        img_with_depth = torch.cat((torch.tensor(np.transpose(img, (2, 0, 1))), depth_map), dim=0) #[4, 256, 256]
+                        depth_maps.append(img_with_depth)
+                    im = torch.stack(depth_maps)
+
+                    image_to_save = im[0][3:4, :, :].permute(1, 2, 0).detach().cpu().numpy()  # Convert to HWC format
+                    image_to_save = (image_to_save * 255).astype(np.uint8)
+                    cv2.imwrite('image_1.jpg', image_to_save)
 
                 # Inference
                 with profilers[1]:
+                    # im = im.half() if self.model.fp16 else im.float()
+                    #im = im.to(self.device)
                     preds = self.inference(im, *args, **kwargs)
+
                     if self.args.embed:
                         yield from [preds] if isinstance(preds, torch.Tensor) else preds  # yield embedding tensors
                         continue
@@ -290,7 +322,7 @@ class BasePredictor:
             t = tuple(x.t / self.seen * 1e3 for x in profilers)  # speeds per image
             LOGGER.info(
                 f"Speed: %.1fms preprocess, %.1fms inference, %.1fms postprocess per image at shape "
-                f"{(min(self.args.batch, self.seen), 3, *im.shape[2:])}" % t
+                f"{(min(self.args.batch, self.seen), 4, *im.shape[2:])}" % t
             )
         if self.args.save or self.args.save_txt or self.args.save_crop:
             nl = len(list(self.save_dir.glob("labels/*.txt")))  # number of labels

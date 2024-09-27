@@ -156,7 +156,7 @@ class BaseValidator:
             self.dataloader = self.dataloader or self.get_dataloader(self.data.get(self.args.split), self.args.batch)
 
             model.eval()
-            model.warmup(imgsz=(1 if pt else self.args.batch, 4, imgsz, imgsz))  # warmup ###### phải sửa
+            model.warmup(imgsz=(1 if pt else self.args.batch, 4, imgsz, imgsz))  ####### phải sửa
         self.run_callbacks("on_val_start")
         dt = (
             Profile(device=self.device),
@@ -170,7 +170,7 @@ class BaseValidator:
         for batch_i, batch in enumerate(bar):
             self.run_callbacks("on_val_batch_start")
             self.batch_i = batch_i
-            batch_images = batch['img']  # (batch_size x 2, 3, H, W) do parallel
+            batch_images = batch['img']  # (batch_size x 2, 3, H, W) x2 do parallel
             depth_maps = []
             for i in range(batch_images.size(0)):
                 img = batch_images[i]
@@ -190,9 +190,6 @@ class BaseValidator:
             # Preprocess
             with dt[0]:
                 batch = self.preprocess(batch) #### model/yolo/detect/val
-                # image_to_save = batch["img"][:, :3, :, :][0].permute(1, 2, 0).detach().cpu().numpy()
-                # image_to_save = (image_to_save*255).astype(np.uint8)
-                # cv2.imwrite('image_before_valid.jpg', cv2.cvtColor(image_to_save, cv2.COLOR_RGB2BGR))
                 
             # Inference
             with dt[1]:
