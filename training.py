@@ -1,4 +1,4 @@
 from ultralytics import YOLO
 
-model = YOLO("yolov8n.pt")
-model.train(data="datasets/data/mydataset.yaml", epochs=1, batch=8, workers=4)
+model = YOLO("ckp/last.pt")
+model.train(data="datasets/data/overhead.yaml", epochs=6, batch=8, workers=4, pretrained=True)
