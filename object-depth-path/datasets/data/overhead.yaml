@@ -1,0 +1,4 @@
+train: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train_overhead
+val: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/val_overhead
+nc: 1
+names: ['person']

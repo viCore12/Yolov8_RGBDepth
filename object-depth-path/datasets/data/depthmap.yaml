@@ -1,0 +1,4 @@
+train: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/images_depth
+val: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/images_depth
+nc: 1
+names: ['person']

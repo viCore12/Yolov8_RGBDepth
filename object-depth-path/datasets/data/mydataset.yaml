@@ -1,0 +1,4 @@
+train: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train_stereo
+val: /home/ibe/metanode-ai/AI_Nhan/object-depth/datasets/data/train_stereo
+nc: 1
+names: ['person']
